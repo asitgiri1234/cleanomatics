@@ -14,7 +14,7 @@ of question, and the assistant has to tell them apart.
 
 - **Things that don't change** — refund rules, billing cycles, shipping
   policies, FAQs. These live in a local knowledge base of text files under
-  `data/kb/` that the assistant searches through.
+  `knowledge_base/` that the assistant searches through.
 - **Things that do change** — the status of a specific order. These come from
   a ShipFlow order-lookup tool the assistant calls for real data.
 
@@ -55,17 +55,33 @@ is asked to do both at once.
 
 ```
 app/
-  main.py        FastAPI app
-  config.py      settings from the environment
-  api/           the /chat endpoint
-  schemas/       Pydantic request, response, and internal models
-  agent/         the planner call and the orchestration around it
-  kb/            loading, embedding, and searching the knowledge base
-  llm/           Groq client and prompt templates
-  tools/         the ShipFlow order lookup
-data/kb/         knowledge-base documents
+  main.py          FastAPI app
+  config.py        settings from the environment
+  api/             the /chat endpoint
+  schemas/         Pydantic request, response, and internal models
+  agent/           the planner call and the orchestration around it
+  kb/              loading, chunking, embedding, and searching the documents
+  llm/             Groq client and prompt templates
+  tools/           the ShipFlow order lookup
+knowledge_base/    ShipFlow policy documents
+scripts/           standalone command-line tools
 tests/
 ```
+
+## Searching the knowledge base
+
+Retrieval works on its own, with no Groq key and no server running:
+
+```bash
+python scripts/search_kb.py "how long do refunds take"
+python scripts/search_kb.py --demo
+```
+
+Documents are split on their Markdown sections, each chunk is embedded locally
+with `all-MiniLM-L6-v2`, and search is cosine similarity against those vectors
+held in memory. Anything scoring below `SIMILARITY_THRESHOLD` is dropped, so a
+question the documents do not cover comes back with no evidence rather than
+with the closest available paragraph.
 
 ## Running it
 
@@ -79,8 +95,8 @@ uvicorn app.main:app --reload
 
 ## Status
 
-Skeleton only — the structure is in place, the behaviour is not. Implementation
-is next.
+Knowledge base and retrieval work. The Groq calls, the order lookup, and the
+`/chat` endpoint are not built yet.
 
 ## Built with
 
