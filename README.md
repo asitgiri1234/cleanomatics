@@ -59,9 +59,9 @@ app/
   config.py        settings from the environment
   api/             the /chat endpoint
   schemas/         Pydantic request, response, and internal models
-  agent/           the planner call and the orchestration around it
+  agent/           the planner call and the answer generator
   kb/              loading, chunking, embedding, and searching the documents
-  llm/             Groq client and prompt templates
+  llm/             Groq client, prompts, and LLM errors
   tools/           the ShipFlow order lookup
 knowledge_base/    ShipFlow policy documents
 scripts/           standalone command-line tools
@@ -83,6 +83,27 @@ held in memory. Anything scoring below `SIMILARITY_THRESHOLD` is dropped, so a
 question the documents do not cover comes back with no evidence rather than
 with the closest available paragraph.
 
+## Configuring the Groq key
+
+Copy the example file and paste your key into it:
+
+```bash
+cp .env.example .env      # Windows: copy .env.example .env
+```
+
+Then edit `.env` and fill in the blank line:
+
+```
+GROQ_API_KEY=gsk_your_key_here
+```
+
+Keys come from https://console.groq.com/keys. `.env` is gitignored, so the key
+never reaches the repository. An environment variable of the same name takes
+precedence if you would rather not use a file.
+
+Without a key, retrieval and the order tool still work and the test suite still
+passes — only the two LLM calls need it.
+
 ## Running it
 
 ```bash
@@ -95,8 +116,9 @@ uvicorn app.main:app --reload
 
 ## Status
 
-Knowledge base and retrieval work. The Groq calls, the order lookup, and the
-`/chat` endpoint are not built yet.
+The knowledge base, retrieval, the order lookup, and both Groq calls are built
+and tested. What is missing is the orchestrator that joins them and the `/chat`
+endpoint that exposes it.
 
 ## Built with
 

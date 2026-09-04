@@ -22,9 +22,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Groq — not used until the LLM step.
+    # Groq
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
+    groq_timeout_seconds: float = 30.0
+    groq_max_retries: int = 2
+    llm_max_tokens: int = 1024
 
     # Knowledge base
     kb_dir: Path = Path("knowledge_base")
