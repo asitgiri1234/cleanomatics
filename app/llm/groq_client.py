@@ -98,6 +98,14 @@ class GroqLLMClient:
             raise LLMConfigurationError(
                 "Groq rejected the API key. Check GROQ_API_KEY is current and correct."
             ) from error
+        except groq.NotFoundError as error:
+            # Groq retires models, and the failure otherwise reads as a generic
+            # 404 that looks like a bug in this code rather than stale config.
+            raise LLMConfigurationError(
+                f"Groq does not serve the model '{self.model}'. It may have been "
+                "retired. Set GROQ_MODEL in your .env to a current model — run "
+                "`python scripts/list_models.py` to see what your key can use."
+            ) from error
         except groq.APIStatusError as error:
             raise LLMAPIError(
                 f"Groq returned {error.status_code}: {error.message}",

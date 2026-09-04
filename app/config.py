@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # Groq
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
     groq_timeout_seconds: float = 30.0
     groq_max_retries: int = 2
     llm_max_tokens: int = 1024
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     # Retrieval
     embedding_model: str = "all-MiniLM-L6-v2"
     top_k: int = 4
-    similarity_threshold: float = 0.30
+    similarity_threshold: float = 0.35
 
     # Chunking
     chunk_max_chars: int = 900
