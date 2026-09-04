@@ -1,0 +1,19 @@
+# API
+fastapi
+uvicorn[standard]
+
+# Configuration and validation
+pydantic
+pydantic-settings
+python-dotenv
+
+# LLM
+groq
+
+# Knowledge base / retrieval
+sentence-transformers
+numpy
+
+# Tests
+pytest
+httpx
