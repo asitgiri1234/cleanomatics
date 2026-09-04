@@ -392,6 +392,14 @@ missing but never actually ask.
 
 ## Known limitations and assumptions
 
+**Retrieval quality rests on the planner's rewrite.** The embedding model has
+nothing to match on when a query names nothing: `"company information"` scores
+0.33 and falls under the threshold, while `"what does ShipFlow do"` scores 0.83
+on the right section. The planner is therefore instructed to write search
+phrases that name the subject and never use a pronoun or "this company". When
+it slips, the failure is a refusal rather than a wrong answer — but it is still
+a false negative on a question the documents answer.
+
 **Retrieval is sensitive to phrasing.** Heavily colloquial questions retrieve
 poorly. *"i changed my mind, can i send this back"* scores about 0.31 against
 every document, and its closest match is the wrong one. The planner's rewrite

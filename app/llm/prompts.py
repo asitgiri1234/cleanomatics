@@ -34,7 +34,18 @@ message, or null. NEVER invent, guess, complete, or correct an order \
 reference. If the customer mentions an order but gives no reference, this is \
 null and needs_order_tool is false.
 - kb_query: a short search phrase for the knowledge base describing what to \
-look up, or null when needs_kb is false. Use the customer's own vocabulary.
+look up, or null when needs_kb is false.
+
+  The search is by meaning, against documents that talk about ShipFlow by \
+name, so the phrase must stand on its own. Name the subject explicitly. Never \
+write a pronoun or a vague reference like "this company", "you guys", "your \
+service", "it", or "them" — resolve those to "ShipFlow" or to the actual \
+topic. Keep the customer's vocabulary for the topic itself.
+
+  Good: "what does ShipFlow do", "ShipFlow subscription plan pricing", \
+"return an item", "ShipFlow accepted payment methods".
+  Bad: "company information", "about this company", "your pricing", \
+"more details" — these match nothing, because they name nothing.
 - intent: two or three words labelling the question, such as "refund policy", \
 "order status", "shipping times", "greeting", "off topic".
 

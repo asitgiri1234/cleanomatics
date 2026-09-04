@@ -240,3 +240,82 @@ def test_planner_never_produces_customer_facing_text():
         "kb_query",
         "intent",
     }
+
+
+# The kb_query must be able to stand on its own
+
+
+def test_prompt_requires_self_contained_search_phrases():
+    """A vague kb_query is the one planner mistake retrieval cannot recover from.
+
+    "tell me more about this company" reached the retriever as "company
+    information", which scores 0.33 and falls under the threshold, so a
+    question the FAQ answers came back refused. Naming the subject fixes it:
+    "what does ShipFlow do" scores 0.83 on the right section.
+    """
+    from app.llm.prompts import PLANNER_SYSTEM_PROMPT
+
+    lowered = PLANNER_SYSTEM_PROMPT.lower()
+    assert "stand on its own" in lowered
+    assert "this company" in lowered
+    assert "resolve" in lowered
+
+
+def test_vague_kb_query_is_still_passed_through_unchanged():
+    """The planner is asked to write good queries; nothing silently rewrites them.
+
+    Retrieval quality is the planner's responsibility. If a poor query does get
+    through, it reaches the retriever as written and the threshold catches it —
+    the failure is a refusal, never a wrong answer.
+    """
+    client = FakeLLMClient(plan_reply(needs_kb=True, kb_query="company information"))
+
+    plan = plan_question("tell me more about this company", client)
+
+    assert plan.kb_query == "company information"
+
+
+# Order references as customers actually write them
+
+
+@pytest.mark.parametrize(
+    "written,expected",
+    [
+        ("status of ORD-1001", "ORD-1001"),
+        ("status of ORD 1003", "ORD-1003"),
+        ("status of ord 1003", "ORD-1003"),
+        ("status of ord1002", "ORD-1002"),
+        ("status of ORD_1004", "ORD-1004"),
+        ("what about FAIL 001", "FAIL-001"),
+    ],
+)
+def test_loose_order_references_are_recognised(written, expected):
+    assert find_order_ids(written) == [expected]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I ordered in 2024",
+        "we have up to 500 orders",
+        "call me on 555 0100",
+        "my plan is 29 dollars",
+        "no reference at all",
+    ],
+)
+def test_ordinary_prose_is_not_mistaken_for_an_order(text):
+    """A looser pattern must not turn "in 2024" into order IN-2024."""
+    assert find_order_ids(text) == []
+
+
+def test_a_reference_written_twice_is_found_once():
+    assert find_order_ids("ORD-1001 — I mean ord 1001") == ["ORD-1001"]
+
+
+def test_spaced_reference_is_recovered_when_the_planner_misses_it():
+    client = FakeLLMClient(plan_reply(needs_kb=True, kb_query="order status"))
+
+    plan = plan_question("what is the status of ORD 1003", client)
+
+    assert plan.order_id == "ORD-1003"
+    assert plan.needs_order_tool is True

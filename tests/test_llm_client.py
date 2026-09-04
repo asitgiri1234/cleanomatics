@@ -194,3 +194,37 @@ def test_broken_json_is_rejected_with_the_original_text():
         parse_json_object('{"needs_kb": tru')
 
     assert caught.value.raw is not None
+
+
+# A model that declines in JSON mode
+
+
+def _bad_request(message: str) -> groq.BadRequestError:
+    request = httpx.Request("POST", "https://api.groq.com")
+    response = httpx.Response(400, request=request, json={"error": {"message": message}})
+    return groq.BadRequestError(message, response=response, body=None)
+
+
+def test_refusal_in_json_mode_is_a_response_error_not_an_api_error():
+    """Groq rejects the request when the model replies in prose in JSON mode.
+
+    A prompt-injection attempt triggers exactly this: the model says "I can't
+    comply with that", which is not JSON, and Groq returns 400
+    json_validate_failed. Treated as an API error it becomes a 502 error page;
+    treated as a response error the orchestrator degrades and still answers.
+    """
+    client = _client_raising(
+        _bad_request("Failed to generate JSON. code: json_validate_failed")
+    )
+
+    with pytest.raises(LLMResponseError):
+        client.complete("system", "user", json_mode=True)
+
+
+def test_other_bad_requests_are_still_api_errors():
+    client = _client_raising(_bad_request("model does not support this parameter"))
+
+    with pytest.raises(LLMAPIError) as caught:
+        client.complete("system", "user")
+
+    assert caught.value.status_code == 400

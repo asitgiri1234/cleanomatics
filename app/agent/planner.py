@@ -20,13 +20,40 @@ from app.schemas.agent import Plan
 
 ORDER_ID_PATTERN = re.compile(r"\b([A-Z]{2,6}-\d{3,})\b", re.IGNORECASE)
 
+# Customers also write the reference with a space, or with nothing at all:
+# "ORD 1003", "ord1003". Matching that generically would be reckless — a bare
+# `[A-Z]{2,6}\s\d{3,}` turns "in 2024" into order IN-2024 — so the separator is
+# only optional after a prefix the order service actually issues.
+ORDER_PREFIXES = ("ORD", "FAIL")
+LOOSE_ORDER_ID_PATTERN = re.compile(
+    rf"\b({'|'.join(ORDER_PREFIXES)})[\s_]*(\d{{3,}})\b", re.IGNORECASE
+)
+
 # The planner should be near-deterministic: it is classifying, not writing.
 PLANNER_TEMPERATURE = 0.0
 
 
 def find_order_ids(text: str) -> list[str]:
-    """Return every order-shaped reference in the text, uppercased."""
-    return [match.group(1).upper() for match in ORDER_ID_PATTERN.finditer(text)]
+    """Return every order-shaped reference in the text, in canonical form.
+
+    Handles the hyphenated form the documents use and the looser spellings
+    customers actually type, normalising all of them to `ORD-1001`. Order is
+    preserved and duplicates are dropped, so a reference written two ways in
+    one message is found once.
+    """
+    found: list[str] = []
+
+    for match in ORDER_ID_PATTERN.finditer(text):
+        reference = match.group(1).upper()
+        if reference not in found:
+            found.append(reference)
+
+    for match in LOOSE_ORDER_ID_PATTERN.finditer(text):
+        reference = f"{match.group(1).upper()}-{match.group(2)}"
+        if reference not in found:
+            found.append(reference)
+
+    return found
 
 
 def _strip_invented_order_id(plan: Plan, question: str) -> Plan:

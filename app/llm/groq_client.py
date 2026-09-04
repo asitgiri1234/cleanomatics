@@ -106,6 +106,22 @@ class GroqLLMClient:
                 "retired. Set GROQ_MODEL in your .env to a current model — run "
                 "`python scripts/list_models.py` to see what your key can use."
             ) from error
+        except groq.BadRequestError as error:
+            # In JSON mode, a model that declines to answer replies in prose,
+            # and Groq rejects the whole request with `json_validate_failed`
+            # rather than returning the text. That is the model misbehaving on
+            # a healthy connection — the same situation as unparseable output —
+            # so it is reported as a response error, which callers already know
+            # how to degrade around. Anything else here is a genuine bad request.
+            if "json_validate_failed" in str(error):
+                raise LLMResponseError(
+                    "Model did not return JSON; it replied in prose instead",
+                    raw=str(error),
+                ) from error
+            raise LLMAPIError(
+                f"Groq returned {error.status_code}: {error.message}",
+                status_code=error.status_code,
+            ) from error
         except groq.APIStatusError as error:
             raise LLMAPIError(
                 f"Groq returned {error.status_code}: {error.message}",
