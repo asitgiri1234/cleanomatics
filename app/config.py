@@ -45,6 +45,16 @@ class Settings(BaseSettings):
     app_host: str = "127.0.0.1"
     app_port: int = 8000
 
+    # Browser access. The bundled UI is served by this same app, so it is
+    # same-origin and needs none of this. These matter only when the page is
+    # opened from somewhere else - a separate static server, or a file:// URL.
+    allowed_origins: str = "*"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """`ALLOWED_ORIGINS` as a list. "*" means any origin."""
+        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
     @property
     def kb_path(self) -> Path:
         """The knowledge-base directory as an absolute path.

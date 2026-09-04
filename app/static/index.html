@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShipFlow Support — Cleanomatics</title>
+<style>
+  /* One file, no build step, no framework. Served by the same FastAPI app
+     that answers /chat, so requests are same-origin and need no CORS. */
+
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --border: #e3e6ea;
+    --text: #1a1d21;
+    --muted: #6b7280;
+    --user-bg: #2563eb;
+    --user-text: #ffffff;
+    --bot-bg: #f1f3f5;
+    --error-bg: #fef2f2;
+    --error-border: #fecaca;
+    --error-text: #991b1b;
+    --accent: #2563eb;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115;
+      --panel: #161a20;
+      --border: #262c35;
+      --text: #e6e8eb;
+      --muted: #9099a5;
+      --user-bg: #2563eb;
+      --user-text: #ffffff;
+      --bot-bg: #1e242c;
+      --error-bg: #2a1416;
+      --error-border: #5b2226;
+      --error-text: #fca5a5;
+      --accent: #60a5fa;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 780px;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 13px; color: var(--muted); margin-left: auto; }
+
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted); flex: none;
+  }
+  .dot.ok { background: #22c55e; }
+  .dot.down { background: #ef4444; }
+
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .row { display: flex; }
+  .row.user { justify-content: flex-end; }
+
+  .bubble {
+    max-width: 84%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .row.user .bubble {
+    background: var(--user-bg);
+    color: var(--user-text);
+    border-bottom-right-radius: 4px;
+  }
+
+  .row.bot .bubble {
+    background: var(--bot-bg);
+    border-bottom-left-radius: 4px;
+  }
+
+  .row.error .bubble {
+    background: var(--error-bg);
+    border: 1px solid var(--error-border);
+    color: var(--error-text);
+  }
+
+  .hint {
+    color: var(--muted);
+    font-size: 13.5px;
+    text-align: center;
+    margin: auto 0;
+    padding: 0 24px;
+  }
+  .hint code {
+    background: var(--bot-bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 12.5px;
+  }
+  .hint button {
+    display: block;
+    margin: 8px auto 0;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 5px 13px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .hint button:hover { border-color: var(--accent); }
+
+  /* Debug panel: collapsed by default so it never competes with the answer. */
+  details {
+    margin-top: 8px;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  summary { cursor: pointer; user-select: none; }
+  summary:hover { color: var(--text); }
+
+  .facts {
+    margin-top: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .fact {
+    display: flex;
+    gap: 10px;
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fact:last-child { border-bottom: none; }
+  .fact .k { flex: 0 0 130px; }
+  .fact .v { color: var(--text); overflow-wrap: anywhere; }
+  .fact .v.warn { color: #d97706; }
+
+  .typing span {
+    display: inline-block;
+    width: 6px; height: 6px;
+    margin-right: 3px;
+    border-radius: 50%;
+    background: var(--muted);
+    animation: blink 1.3s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: .2s; }
+  .typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: .25 } 30% { opacity: 1 } }
+
+  form {
+    display: flex;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  #input {
+    flex: 1;
+    padding: 10px 13px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    resize: none;
+    max-height: 120px;
+  }
+  #input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  button[type=submit] {
+    padding: 0 20px;
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  button[type=submit]:disabled { opacity: .5; cursor: default; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <span class="dot" id="status" title="checking..."></span>
+    <h1>ShipFlow Support</h1>
+    <span class="sub" id="model"></span>
+  </header>
+
+  <div id="messages">
+    <div class="hint" id="hint">
+      Ask about ShipFlow policy, or about an order.<br>
+      Seeded orders: <code>ORD-1001</code> <code>ORD-1002</code>
+      <code>ORD-1003</code> <code>ORD-1004</code>, plus <code>FAIL-001</code>
+      which deliberately fails.
+      <button type="button" id="try">Try an example</button>
+    </div>
+  </div>
+
+  <form id="form">
+    <textarea id="input" rows="1" placeholder="Ask a question..." autocomplete="off"></textarea>
+    <button type="submit" id="send">Send</button>
+  </form>
+</div>
+
+<script>
+const messagesEl = document.getElementById("messages");
+const formEl = document.getElementById("form");
+const inputEl = document.getElementById("input");
+const sendEl = document.getElementById("send");
+const statusEl = document.getElementById("status");
+const modelEl = document.getElementById("model");
+const hintEl = document.getElementById("hint");
+
+const EXAMPLES = [
+  "What is ShipFlow's refund policy?",
+  "What is the status of ORD-1001?",
+  "What is your refund policy and what is the status of ORD-1001?",
+  "Tell me about my order.",
+  "What is the status of FAIL-001?",
+];
+let exampleIndex = 0;
+
+document.getElementById("try").addEventListener("click", () => {
+  inputEl.value = EXAMPLES[exampleIndex % EXAMPLES.length];
+  exampleIndex++;
+  inputEl.focus();
+});
+
+/** Is the backend up, and is it configured to answer? */
+async function checkHealth() {
+  try {
+    const response = await fetch("/health");
+    const body = await response.json();
+    const ready = body.groq_configured;
+    statusEl.className = "dot " + (ready ? "ok" : "down");
+    statusEl.title = ready ? "Connected" : "No GROQ_API_KEY configured";
+    modelEl.textContent = body.model || "";
+  } catch {
+    statusEl.className = "dot down";
+    statusEl.title = "Backend unreachable";
+  }
+}
+
+function addRow(kind) {
+  hintEl?.remove();
+  const row = document.createElement("div");
+  row.className = "row " + kind;
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  row.appendChild(bubble);
+  messagesEl.appendChild(row);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return { row, bubble };
+}
+
+function fact(label, value, warn) {
+  const row = document.createElement("div");
+  row.className = "fact";
+  const k = document.createElement("div");
+  k.className = "k";
+  k.textContent = label;
+  const v = document.createElement("div");
+  v.className = "v" + (warn ? " warn" : "");
+  v.textContent = value;
+  row.append(k, v);
+  return row;
+}
+
+/**
+ * The collapsed panel under each answer.
+ *
+ * Everything here comes from the response the API already returns - the
+ * frontend computes nothing and knows nothing about how answers are produced.
+ */
+function buildDetails(body) {
+  const trace = body.trace || {};
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+
+  const bits = [];
+  if (trace.kb_used) bits.push("KB");
+  if (trace.order_tool_used) bits.push("order tool");
+  summary.textContent =
+    `confidence ${body.confidence.toFixed(2)} · ` +
+    `${body.tool_calls} tool call${body.tool_calls === 1 ? "" : "s"}` +
+    (bits.length ? ` · ${bits.join(" + ")}` : " · no sources");
+  details.appendChild(summary);
+
+  const facts = document.createElement("div");
+  facts.className = "facts";
+
+  facts.appendChild(fact("Sources", body.sources.length ? body.sources.join(", ") : "none"));
+  facts.appendChild(fact("Confidence", body.confidence.toFixed(2)));
+  facts.appendChild(fact("Tool calls", String(body.tool_calls)));
+
+  if (Object.keys(trace).length) {
+    facts.appendChild(fact("Intent", trace.intent ?? "-"));
+    facts.appendChild(fact("KB retrieval", trace.kb_used ? `yes (${trace.kb_calls} call)` : "no"));
+    if (trace.kb_used) {
+      facts.appendChild(
+        fact("Best KB match", `${trace.kb_confidence.toFixed(4)} (threshold ${trace.kb_threshold})`)
+      );
+    }
+    facts.appendChild(fact("Order tool", trace.order_tool_used ? "yes" : "no"));
+    if (trace.order_outcome) facts.appendChild(fact("Order outcome", trace.order_outcome));
+    facts.appendChild(fact("LLM calls", String(trace.llm_calls)));
+    facts.appendChild(fact("Grounded", trace.grounded ? "yes" : "no - nothing verified"));
+    if (trace.degraded?.length) {
+      facts.appendChild(fact("Degraded", trace.degraded.join(", "), true));
+    }
+  }
+
+  details.appendChild(facts);
+  return details;
+}
+
+/** Turn any failure into one readable line. */
+async function describeFailure(response) {
+  let detail = "";
+  try {
+    const body = await response.json();
+    if (body?.error) detail = `${body.error.message} (${body.error.code})`;
+  } catch {
+    // A non-JSON error body: the status alone is what we have.
+  }
+  return detail || `The server returned ${response.status} ${response.statusText}.`;
+}
+
+async function send(question) {
+  addRow("user").bubble.textContent = question;
+
+  const { row, bubble } = addRow("bot");
+  bubble.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+
+  inputEl.disabled = sendEl.disabled = true;
+
+  try {
+    const response = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: question }),
+    });
+
+    if (!response.ok) {
+      row.className = "row error";
+      bubble.textContent = await describeFailure(response);
+      return;
+    }
+
+    const body = await response.json();
+    bubble.textContent = body.answer;
+    bubble.appendChild(buildDetails(body));
+  } catch {
+    // fetch itself failed: the server is not running or the network is gone.
+    row.className = "row error";
+    bubble.textContent =
+      "Could not reach the server. Is it still running on this address?";
+  } finally {
+    inputEl.disabled = sendEl.disabled = false;
+    inputEl.focus();
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+}
+
+formEl.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const question = inputEl.value.trim();
+  if (!question) return;
+  inputEl.value = "";
+  inputEl.style.height = "auto";
+  send(question);
+});
+
+// Enter sends, Shift+Enter makes a new line.
+inputEl.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    formEl.requestSubmit();
+  }
+});
+
+inputEl.addEventListener("input", () => {
+  inputEl.style.height = "auto";
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
+});
+
+checkHealth();
+inputEl.focus();
+</script>
+</body>
+</html>

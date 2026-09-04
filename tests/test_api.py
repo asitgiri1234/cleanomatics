@@ -227,3 +227,62 @@ def test_openapi_schema_is_generated(client):
 
     assert "/chat" in schema["paths"]
     assert "post" in schema["paths"]["/chat"]
+
+
+# The bundled chat UI
+
+
+def test_root_serves_the_chat_page(client):
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "ShipFlow Support" in response.text
+
+
+def test_chat_page_talks_to_the_real_endpoints(client):
+    """The UI must call the API, not carry its own copy of anything.
+
+    Reading `groq_configured` off /health is fine — that is a field the API
+    returns. Naming GROQ_API_KEY in a tooltip is fine too: it tells the user
+    what to set. What must not be here is any of the reasoning, or any key
+    value.
+    """
+    page = client.get("/").text
+    lowered = page.lower()
+
+    assert '"/chat"' in page
+    assert '"/health"' in page
+
+    for forbidden in ["gsk_", "you are a", "similarity_threshold",
+                      "embedding", "cosine", "system_prompt"]:
+        assert forbidden not in lowered, f"{forbidden!r} should not be in the browser"
+
+
+def test_static_files_are_served(client):
+    assert client.get("/static/index.html").status_code == 200
+
+
+def test_cors_headers_are_present_for_a_cross_origin_request(client):
+    response = client.post(
+        "/chat",
+        json={"message": ""},
+        headers={"Origin": "http://localhost:3000"},
+    )
+
+    # The request is rejected on its merits, but CORS still applies, so a page
+    # served from elsewhere can read the error instead of seeing an opaque one.
+    assert "access-control-allow-origin" in {k.lower() for k in response.headers}
+
+
+def test_preflight_is_answered(client):
+    response = client.options(
+        "/chat",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "Content-Type",
+        },
+    )
+
+    assert response.status_code == 200

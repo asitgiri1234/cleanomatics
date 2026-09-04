@@ -8,12 +8,16 @@ or an API key.
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
+from app.config import get_settings
 from app.llm.errors import (
     LLMAPIError,
     LLMConfigurationError,
@@ -62,7 +66,30 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# The chat UI is one static HTML file served by this same app, so the page
+# and the API share an origin and the browser asks no CORS questions. The
+# middleware below only matters if the page is served from somewhere else.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_settings().cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
+
 app.include_router(router)
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+if STATIC_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.get("/", include_in_schema=False)
+    def chat_ui() -> FileResponse:
+        """Serve the chat interface at the root."""
+        return FileResponse(STATIC_DIR / "index.html")
+else:  # pragma: no cover - only if the UI file has been removed
+    logger.warning("No static directory at %s; the chat UI will not be served", STATIC_DIR)
 
 
 @app.exception_handler(RequestValidationError)

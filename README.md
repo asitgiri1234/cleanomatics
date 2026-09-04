@@ -189,6 +189,7 @@ cleanomatics/
 │   │   ├── orders.py            mock order service
 │   │   └── errors.py            structured tool errors
 │   └── schemas/                 chat, agent, kb, orders, trace
+│   └── static/index.html        the chat interface, one file
 ├── knowledge_base/              8 ShipFlow policy documents
 ├── scripts/
 │   ├── search_kb.py             search the KB from the command line
@@ -235,6 +236,7 @@ copy .env.example .env            # macOS/Linux: cp .env.example .env
 | `SIMILARITY_THRESHOLD` | `0.35` | Floor for usable evidence. |
 | `CHUNK_MAX_CHARS` | `900` | Section split size. |
 | `CHUNK_OVERLAP_CHARS` | `150` | Overlap between split pieces. |
+| `ALLOWED_ORIGINS` | `*` | CORS origins. Only needed if the UI is served separately. |
 
 Get a key at https://console.groq.com/keys. `.env` is gitignored and never
 committed. An environment variable of the same name overrides the file.
@@ -251,7 +253,30 @@ one.
 uvicorn app.main:app --reload
 ```
 
-Interactive docs at http://127.0.0.1:8000/docs, readiness at `/health`.
+| URL | What |
+|---|---|
+| http://127.0.0.1:8000/ | **Chat interface** |
+| http://127.0.0.1:8000/docs | Swagger docs |
+| http://127.0.0.1:8000/health | Readiness check |
+
+## The chat interface
+
+One static HTML file at `app/static/index.html`, served by the same FastAPI app
+that answers `/chat`. No framework, no build step, no second server — and
+because the page and the API share an origin, no CORS to configure.
+
+It shows the conversation, a loading indicator while Groq is thinking, and a
+collapsed panel under each answer with the sources, confidence, tool-call count,
+whether retrieval ran, the best match score against the threshold, LLM calls,
+and any degraded steps. All of that comes straight from the `/chat` response —
+the page computes nothing and contains no agent logic.
+
+API errors are rendered in the conversation rather than thrown away, so a 503
+from a missing key or a 502 from Groq reads as a message instead of a silent
+failure.
+
+`ALLOWED_ORIGINS` exists for the case where you serve the page from somewhere
+else; the bundled UI does not need it.
 
 ## Example request
 
